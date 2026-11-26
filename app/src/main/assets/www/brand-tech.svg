@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 900" preserveAspectRatio="none">
+<defs>
+ <linearGradient id="beam"><stop offset="0" stop-color="#00AFFF" stop-opacity="0"/><stop offset=".45" stop-color="#00EFFF"/><stop offset=".65" stop-color="#C7FFFF"/><stop offset="1" stop-color="#009FFF" stop-opacity="0"/></linearGradient>
+ <radialGradient id="halo"><stop offset="0" stop-color="#00CEFF" stop-opacity=".45"/><stop offset="1" stop-color="#00AFFF" stop-opacity="0"/></radialGradient>
+ <pattern id="dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" fill="#24C7FF" opacity=".32"/></pattern>
+ <filter id="glow"><feGaussianBlur stdDeviation="4"/></filter>
+</defs>
+<ellipse cx="220" cy="615" rx="310" ry="260" fill="url(#halo)"/>
+<path d="M-25 220Q100 310 420 226M-20 730Q190 610 460 778M-30 820Q170 950 470 808" fill="none" stroke="url(#beam)" stroke-width="14" filter="url(#glow)" opacity=".8"/>
+<path d="M-25 220Q100 310 420 226M-20 730Q190 610 460 778M-30 820Q170 950 470 808" fill="none" stroke="url(#beam)" stroke-width="1.8"/>
+<ellipse cx="260" cy="167" rx="132" ry="35" transform="rotate(-12 260 167)" fill="none" stroke="url(#beam)" stroke-width="2" opacity=".7"/>
+<g fill="none" stroke="#009BEA" stroke-width="1" opacity=".7">
+ <path d="M0 56H43L61 38H93L112 18M0 68H55L73 50H102M0 82H70L88 100H114M430 37L409 58H382L360 80H341M430 52L414 68H391L366 95"/>
+ <path d="M0 674H28L60 706H95M430 665H404L384 688H361"/>
+</g>
+<g fill="#59F7FF"><circle cx="61" cy="38" r="2"/><circle cx="88" cy="100" r="2"/><circle cx="360" cy="80" r="2"/><circle cx="409" cy="58" r="2"/></g>
+<path d="M0 120H25V214H0ZM405 115H430V226H405ZM0 708H98V802H0ZM350 690H430V795H350Z" fill="url(#dots)" opacity=".65"/>
+</svg>

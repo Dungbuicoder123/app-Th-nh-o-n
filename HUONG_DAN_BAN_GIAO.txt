@@ -1,0 +1,50 @@
+BÀN GIAO DỰ ÁN ĐOÀN VIÊN SỐ ANDROID
+Ngày đóng gói: 25/11/2026
+
+1. MỞ VÀ CHẠY DỰ ÁN
+- Giải nén ZIP, mở thư mục DoanVienSoAndroid bằng Android Studio.
+- Cài JDK 17 và Android SDK Platform 34; chọn JDK phù hợp trong Gradle Settings.
+- Android Studio sẽ tạo local.properties với đường dẫn Android SDK của máy nhận.
+- Sync Gradle (cần Internet để tải Gradle và các thư viện), rồi chạy cấu hình app.
+- Build debug trên macOS/Linux: ./gradlew :app:assembleDebug
+- Build debug trên Windows: gradlew.bat :app:assembleDebug
+- Nếu gradlew thiếu quyền chạy trên macOS/Linux: chmod +x gradlew
+- Các phiên bản plugin và thư viện được giữ nguyên trong dự án, không cần nâng cấp để bàn giao.
+
+2. CẤU TRÚC CHÍNH
+- app/src/main/java/vn/dongnai/doanvienso/: Android Activity và các cầu nối Firebase.
+- app/src/main/assets/www/: giao diện HTML/CSS/JavaScript chạy trong WebView.
+- app/google-services.json: cấu hình ứng dụng khách Firebase của dự án hiện tại.
+- firestore.rules, storage.rules, firebase.json: quy tắc và cấu hình triển khai.
+- README_ANDROID_STUDIO.md: hướng dẫn chức năng và quản trị.
+- supabase/: tài liệu migration cũ được giữ lại để tham khảo.
+- release/: các gói ứng dụng đã build trước đó. Mã nguồn trong ZIP là trạng thái hiện tại, có thể mới hơn thời điểm build các gói này.
+
+3. FIREBASE
+- Dự án đang sử dụng: doanviensoandroid.
+- Firestore rules đã được triển khai trong phiên bàn giao trước.
+- Tải tệp/ảnh/video đang tạm tắt; chưa cần tạo Storage bucket.
+- Đăng tin văn bản vẫn sử dụng Firestore.
+- Người nhận cần được chủ dự án cấp quyền Firebase riêng nếu cần quản trị hoặc triển khai.
+- ZIP không chứa tài khoản đăng nhập Firebase CLI hay khóa service account.
+- Không dùng dữ liệu thật để thử các thao tác ghi/xóa trong quá trình phát triển.
+
+4. KÝ PHÁT HÀNH
+- ZIP không chứa thư mục .signing, khóa phát hành hoặc mật khẩu.
+- Người nhận vẫn build và chạy bản debug được.
+- Muốn phát hành bản cập nhật tương thích với APK đang dùng, chủ dự án cần bàn giao riêng khóa ký hiện tại qua kênh bảo mật.
+- Build ký release dùng .signing/doanvienso-release.p12, alias doanvienso; mật khẩu qua biến DOANVIENSO_SIGNING_PASSWORD hoặc tệp .signing/release-password.
+- Khi chưa có khóa ký, không coi output release là gói sẵn sàng phân phối.
+
+5. THÀNH PHẦN KHÔNG ĐƯA VÀO ZIP
+- .git (lịch sử Git), .idea (thiết lập IDE riêng), .gradle, .kotlin, build, .tools.
+- local.properties, .signing, tệp môi trường/bí mật, log và các ZIP khác.
+- Các thành phần trên không cần thiết để tiếp tục chỉnh sửa mã nguồn.
+- Các thư mục build/cache sẽ được tạo lại khi Sync/Build.
+
+6. ĐẦU RA BUILD
+- app/build.gradle.kts hiện đặt thư mục build dưới thư mục tạm hệ thống:
+  doanvienso-android-build/app/outputs/
+- APK debug: apk/debug/app-debug.apk
+- APK release: apk/release/app-release.apk
+- AAB release: bundle/release/app-release.aab

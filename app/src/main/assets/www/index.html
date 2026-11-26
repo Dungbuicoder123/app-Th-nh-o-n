@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Đoàn Viên Số</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body>
+  <!-- Khung điện thoại chính -->
+  <main class="phone-frame" id="phone-frame">
+    <div id="status-bar" hidden></div>
+
+    <div id="toast-container"></div>
+
+    <div id="app-screen" class="app-screen"></div>
+
+    <nav id="bottom-nav" class="bottom-nav"></nav>
+
+    <div id="modal-root"></div>
+  </main>
+
+  <script src="vendor/qrcode-generator.js"></script>
+  <script src="qrcode.js"></script>
+  <script src="data.js"></script>
+  <script src="features.js"></script>
+
+  <script src="firebase-sync.js"></script>
+  <script src="unit-work.js"></script>
+  <script src="management.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

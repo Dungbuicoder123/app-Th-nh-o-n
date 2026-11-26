@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "49521620436",
+    "project_id": "doanviensoandroid",
+    "storage_bucket": "doanviensoandroid.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:49521620436:android:99645f952d6db975179241",
+        "android_client_info": {
+          "package_name": "vn.dongnai.doanvienso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwPETCanh3sJ54RIFWMeVkjq3DtXJpW2M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,279 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validName(value) {
+      return value is string && value.size() <= 120 && value.matches('.*[^\\s].*');
+    }
+
+    function validPhone(phone) {
+      return phone is string && phone.matches('0[0-9]{9,10}');
+    }
+
+    function validProfile(data) {
+      return data.keys().hasAll(['displayName', 'role', 'unitCode', 'unitName'])
+          && data.keys().hasOnly(['displayName', 'role', 'unitCode', 'unitName', 'phone'])
+          && (!('phone' in data) || (data.role == 'doan_vien' && validPhone(data.phone)))
+          && validName(data.displayName) && validName(data.unitName)
+          && data.unitCode is string && data.unitCode.matches('[A-Za-z0-9]{20}');
+    }
+
+    function validMembership(data) {
+      let unit = /databases/$(database)/documents/registeredUnits/$(data.unitCode);
+      return (data.role == 'doan_vien' && exists(unit) && get(unit).data.name == data.unitName)
+          || (data.role == 'bi_thu' && !exists(unit) && getAfter(unit).data.name == data.unitName);
+    }
+
+
+
+    function textFields(d) {
+      return d is map && d.keys().hasOnly(['name','birthDate','ethnicity','religion','cardNo','citizenId','address','unit','status','phone'])
+        && (!('phone' in d) || validPhone(d.phone))
+        && (!('status' in d) || d.status in ['local','far','transfer'])
+        && (!('name' in d) || (d.name is string && d.name.size() <= 250 && validName(d.name)))
+        && (!('birthDate' in d) || (d.birthDate is string && d.birthDate.size() <= 250))
+        && (!('ethnicity' in d) || (d.ethnicity is string && d.ethnicity.size() <= 250))
+        && (!('religion' in d) || (d.religion is string && d.religion.size() <= 250))
+        && (!('cardNo' in d) || (d.cardNo is string && d.cardNo.size() <= 250))
+        && (!('citizenId' in d) || (d.citizenId is string && d.citizenId.size() <= 250))
+        && (!('address' in d) || (d.address is string && d.address.size() <= 250))
+        && (!('unit' in d) || (d.unit is string && d.unit.size() <= 250));
+    }
+
+    match /users/{uid} {
+      allow list: if signedIn() && request.auth.uid == uid;
+      allow update: if manages(resource.data.unitCode)
+          && (resource.data.role == 'doan_vien' || request.auth.uid == uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'details', 'phone'])
+          && (!('phone' in request.resource.data) || validPhone(request.resource.data.phone))
+          && validName(request.resource.data.displayName)
+          && textFields(request.resource.data.get('details', {}));
+      allow list: if manages(resource.data.unitCode) && resource.data.role == 'bi_thu'
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ward_officer';
+      allow list: if signedIn() && resource.data.role == 'doan_vien'
+          && manages(resource.data.unitCode);
+      allow update: if signedIn() && request.auth.uid == uid && resource.data.role == 'doan_vien'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone'])
+          && validPhone(request.resource.data.phone);
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+          && validProfile(request.resource.data) && validMembership(request.resource.data);
+    }
+
+    // Cán bộ được cấp vai trò bởi quản trị viên quản lý tất cả chi đoàn.
+    // Client không được tự tạo hoặc sửa role/unitCode trong users.
+    function isOfficer() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ward_officer';
+    }
+    function officerFor(unit) {
+      return isOfficer()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unitCode == unit;
+    }
+
+    function validUnit(data) {
+      return data.keys().hasOnly(['name','address','contactPhone','parentUnitCode'])
+        && validName(data.name)
+        && data.get('address', '') is string && data.get('address', '').size() <= 250
+        && (data.get('contactPhone', '') == '' || validPhone(data.contactPhone))
+        && data.get('parentUnitCode', '') is string;
+    }
+
+    match /registeredUnits/{id} {
+      allow create: if signedIn() && id.matches('[A-Za-z0-9]{20}') && validUnit(request.resource.data)
+        && ((managesOwn(id) && !('parentUnitCode' in request.resource.data))
+          || (id != request.resource.data.get('parentUnitCode', '') && officerFor(request.resource.data.get('parentUnitCode', ''))));
+      allow update: if manages(id) && validUnit(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','address','contactPhone']);
+      allow read: if signedIn();
+      allow create: if signedIn() && id.matches('[A-Za-z0-9]{20}')
+          && request.resource.data.keys().hasOnly(['name']) && validName(request.resource.data.name)
+          && createsSecretaryProfile(id, request.resource.data.name);
+    }
+
+    function inUnit(unit) {
+      return signedIn() && (isOfficer()
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unitCode == unit);
+    }
+    function managesOwn(unit) {
+      return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.unitCode == unit
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['bi_thu', 'ward_officer'];
+    }
+    function manages(unit) {
+      return isOfficer() || managesOwn(unit);
+    }
+
+    match /unitWork/{unit} {
+      function event(id) {
+        return get(/databases/$(database)/documents/unitWork/$(unit)/events/$(id)).data;
+      }
+      function bookingChanged(id, delta) {
+        let key = id + '~' + request.auth.uid;
+        let path = /databases/$(database)/documents/unitWork/$(unit)/receipts/$(key);
+        return (delta == 1 && !exists(path) && existsAfter(path))
+            || (delta == -1 && exists(path) && !existsAfter(path));
+      }
+      match /events/{id} {
+        allow read: if inUnit(unit) || manages(unit);
+        allow create: if manages(unit) && id.matches('[a-zA-Z0-9_-]{1,100}')
+          && request.resource.data.keys().hasOnly(['kind','content','deadline','points','capacity','booked'])
+          && request.resource.data.kind in ['meeting','makeup','points','register','news']
+          && request.resource.data.content is string && request.resource.data.content.size() <= 250000
+          && request.resource.data.deadline is timestamp
+          && (request.resource.data.kind != 'meeting' || request.resource.data.deadline > request.time)
+          && request.resource.data.points is int && request.resource.data.points >= 0 && request.resource.data.points <= 1000
+          && request.resource.data.capacity is int && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+          && request.resource.data.booked == 0;
+        allow update: if inUnit(unit) && resource.data.kind == 'makeup'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['booked'])
+          && request.resource.data.booked >= 0 && request.resource.data.booked <= resource.data.capacity
+          && bookingChanged(id, request.resource.data.booked - resource.data.booked);
+      }
+      match /statistics/members {
+        allow read: if inUnit(unit) || manages(unit);
+        allow create, update: if manages(unit)
+          && request.resource.data.keys().hasOnly(['total','local','far','transfer'])
+          && request.resource.data.total is int && request.resource.data.total >= 0
+          && request.resource.data.local is int && request.resource.data.local >= 0
+          && request.resource.data.far is int && request.resource.data.far >= 0
+          && request.resource.data.transfer is int && request.resource.data.transfer >= 0
+          && request.resource.data.local + request.resource.data.far + request.resource.data.transfer <= request.resource.data.total;
+      }
+      match /roster/{phone} {
+        allow read: if manages(unit);
+        allow create, update: if manages(unit) && validPhone(phone)
+          && request.resource.data.phone == phone && validName(request.resource.data.name)
+          && request.resource.data.keys().hasOnly(['name','phone','group','job','shift','status','birthYear','details','accountUid'])
+          && (!('accountUid' in request.resource.data) || (request.resource.data.accountUid.matches('[a-zA-Z0-9_-]{1,128}')
+            && get(/databases/$(database)/documents/users/$(request.resource.data.accountUid)).data.unitCode == unit
+            && get(/databases/$(database)/documents/users/$(request.resource.data.accountUid)).data.role == 'doan_vien'))
+          && request.resource.data.status in ['local','far','transfer']
+          && request.resource.data.birthYear is int && request.resource.data.birthYear >= 1900
+          && request.resource.data.birthYear <= 2200
+          && request.resource.data.group is string && request.resource.data.group.size() <= 250
+          && request.resource.data.job is string && request.resource.data.job.size() <= 250
+          && request.resource.data.shift is string && request.resource.data.shift.size() <= 250
+          && textFields(request.resource.data.get('details', {}));
+      }
+      match /awards/{id} {
+        allow read: if inUnit(unit) && (manages(unit) || resource.data.owner == request.auth.uid);
+        allow create: if manages(unit) && id.matches('[a-f0-9]{24}')
+          && request.resource.data.keys().hasOnly(['owner','memberName','title','level','points','at'])
+          && request.resource.data.owner.matches('[a-zA-Z0-9_-]{1,160}')
+          && validName(request.resource.data.memberName) && validName(request.resource.data.title)
+          && request.resource.data.level in ['Cấp chi đoàn','Cấp phường','Cấp thành phố','Cấp tỉnh']
+          && request.resource.data.points == {'Cấp chi đoàn':10,'Cấp phường':15,'Cấp thành phố':25,'Cấp tỉnh':30}[request.resource.data.level]
+          && request.resource.data.at == request.time;
+      }
+      match /keys/{id} {
+        allow read: if manages(unit);
+        allow create: if manages(unit) && request.resource.data.keys().hasOnly(['code'])
+          && request.resource.data.code is string && request.resource.data.code.matches('[A-Z0-9]{8,32}')
+          && getAfter(/databases/$(database)/documents/unitWork/$(unit)/events/$(id)).data.kind == 'meeting';
+      }
+      match /receipts/{id} {
+        function permitsClaim(d) {
+          let e = event(d.event);
+          return (e.kind == 'points' && d.owner == request.auth.uid)
+              || (e.kind == 'meeting' && request.time < e.deadline
+                && d.code == get(/databases/$(database)/documents/unitWork/$(unit)/keys/$(d.event)).data.code)
+              || (e.kind == 'makeup' && d.owner == request.auth.uid
+                && getAfter(/databases/$(database)/documents/unitWork/$(unit)/events/$(d.event)).data.booked == e.booked + 1);
+        }
+        allow list: if inUnit(unit) && (resource.data.owner == request.auth.uid || manages(unit));
+        allow get: if inUnit(unit) && (id.matches('[a-zA-Z0-9_-]+~' + request.auth.uid) || manages(unit));
+        allow create: if inUnit(unit) && request.resource.data.keys().hasOnly(['owner','event','code','at'])
+          && request.resource.data.event.matches('[a-zA-Z0-9_-]{1,100}')
+          && id == request.resource.data.event + '~' + request.resource.data.owner
+          && (request.resource.data.owner == request.auth.uid || manages(unit))
+          && request.resource.data.at == request.time && permitsClaim(request.resource.data);
+        allow delete: if inUnit(unit) && resource.data.owner == request.auth.uid && event(resource.data.event).kind == 'makeup'
+          && getAfter(/databases/$(database)/documents/unitWork/$(unit)/events/$(resource.data.event)).data.booked == event(resource.data.event).booked - 1;
+      }
+      // Góp ý: người gửi xem của mình; cán bộ trong phạm vi đơn vị tiếp nhận.
+      match /feedback/{id} {
+        function validFeedback(d) {
+          return d.keys().hasAll(['owner','name','title','body','status','at'])
+            && d.keys().hasOnly(['owner','name','title','body','status','at','receivedBy','receivedAt'])
+            && d.owner is string && d.owner.size() > 0 && d.owner.size() <= 128
+            && validName(d.name)
+            && d.title is string && d.title.size() > 0 && d.title.size() <= 120 && d.title.matches('.*[^\\s].*')
+            && d.body is string && d.body.size() > 0 && d.body.size() <= 4000
+            && d.status in ['pending','received'] && d.at is timestamp
+            && (d.status == 'pending'
+              ? !('receivedBy' in d) && !('receivedAt' in d)
+              : d.receivedBy is string && d.receivedBy.size() > 0 && d.receivedBy.size() <= 128 && d.receivedAt is timestamp);
+        }
+        // Cho phép đọc tài liệu chưa tồn tại để giao dịch gửi lại không tạo góp ý trùng.
+        allow get: if inUnit(unit) && (!exists(/databases/$(database)/documents/unitWork/$(unit)/feedback/$(id))
+          || manages(unit) || resource.data.owner == request.auth.uid);
+        allow list: if inUnit(unit) && (manages(unit) || resource.data.owner == request.auth.uid);
+        allow create: if inUnit(unit) && id.matches('[a-f0-9]{24}')
+          && validFeedback(request.resource.data)
+          && request.resource.data.owner == request.auth.uid
+          && request.resource.data.name == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+          && request.resource.data.status == 'pending' && request.resource.data.at == request.time;
+        allow update: if manages(unit) && validFeedback(request.resource.data)
+          && resource.data.status == 'pending' && request.resource.data.status == 'received'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','receivedBy','receivedAt'])
+          && request.resource.data.receivedBy == request.auth.uid && request.resource.data.receivedAt == request.time;
+      }
+      match /profileRequests/{id} {
+        function submission() {
+          let d = request.resource.data;
+          return id == request.auth.uid && d.owner == id && d.status == 'pending' && d.at == request.time
+            && d.keys().hasOnly(['owner','changes','version','status','at'])
+            && d.version.matches('[a-f0-9]{24}') && textFields(d.changes) && d.changes.size() > 0;
+        }
+        allow read: if inUnit(unit) && (resource.data.owner == request.auth.uid || manages(unit));
+        allow create: if inUnit(unit) && submission();
+        allow update: if inUnit(unit) && ((submission() && request.resource.data.version != resource.data.version)
+          || (manages(unit) && resource.data.status == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','at'])
+            && request.resource.data.at == request.time && request.resource.data.status in ['approved','rejected']));
+      }
+      match /applications/{id} {
+        allow read: if inUnit(unit) && (resource.data.owner == request.auth.uid || manages(unit));
+        allow create: if inUnit(unit) && id.matches('[a-zA-Z0-9_-]{1,100}')
+          && request.resource.data.keys().hasOnly(['event','owner','profileCode','submitterName','unitName','registrationType','notes','phone','status','rejectReason','at'])
+          && request.resource.data.owner == request.auth.uid && request.resource.data.at == request.time
+          && request.resource.data.status == 'pending' && request.resource.data.rejectReason == ''
+          && request.resource.data.event.matches('[a-zA-Z0-9_-]{1,100}') && event(request.resource.data.event).kind == 'register'
+          && (event(request.resource.data.event).deadline.toMillis() == 0 || event(request.resource.data.event).deadline > request.time)
+          && request.resource.data.profileCode.matches('[A-Za-z0-9-]{1,50}')
+          && validName(request.resource.data.submitterName) && validName(request.resource.data.unitName)
+          && request.resource.data.registrationType is string && request.resource.data.registrationType.size() < 120
+          && request.resource.data.notes is string && request.resource.data.notes.size() <= 4000
+          && request.resource.data.phone is string && request.resource.data.phone.size() <= 30;
+        allow update: if manages(unit) && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','rejectReason','decidedAt'])
+          && request.resource.data.status in ['approved','rejected'] && request.resource.data.decidedAt == request.time
+          && request.resource.data.rejectReason is string && request.resource.data.rejectReason.size() <= 1000;
+        allow delete: if inUnit(unit) && resource.data.owner == request.auth.uid && resource.data.status == 'pending';
+      }
+      match /evidence/{id} {
+        allow read: if inUnit(unit) && (resource.data.owner == request.auth.uid || manages(unit));
+        allow create: if inUnit(unit) && id.matches('[a-zA-Z0-9_-]{1,100}') && request.resource.data.owner == request.auth.uid
+          && request.resource.data.keys().hasOnly(['owner','event','name','description','image','link','status','at'])
+          && request.resource.data.event.matches('[a-zA-Z0-9_-]{1,100}') && event(request.resource.data.event).kind in ['points','register']
+          && validName(request.resource.data.name) && request.resource.data.description is string
+          && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 4000
+          && request.resource.data.link is string && request.resource.data.link.size() <= 2000
+          && request.resource.data.image is string && request.resource.data.image.size() <= 850000
+          && request.resource.data.status == 'pending' && request.resource.data.at == request.time;
+        allow update: if manages(unit) && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['verified','revision'];
+      }
+    }
+
+    function createsSecretaryProfile(id, name) {
+      let profile = /databases/$(database)/documents/users/$(request.auth.uid);
+      let after = getAfter(profile).data;
+      return !exists(profile) && after.role == 'bi_thu' && after.unitCode == id && after.unitName == name;
+    }
+  }
+}

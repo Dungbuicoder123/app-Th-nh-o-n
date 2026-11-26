@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.DoanVienSo" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#0055D4</item>
+        <item name="colorPrimaryDark">#07347D</item>
+        <item name="colorAccent">#0055D4</item>
+        <item name="android:statusBarColor">#032562</item>
+        <item name="android:navigationBarColor">#032562</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+    </style>
+</resources>

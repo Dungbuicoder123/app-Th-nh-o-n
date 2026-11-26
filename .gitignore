@@ -1,0 +1,14 @@
+.gradle/
+.idea/
+.tools/
+local.properties
+**/build/
+*.iml
+.DS_Store
+.signing/
+release/
+
+dist/
+*.apk
+*.zip
+*.rar
